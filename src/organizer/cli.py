@@ -212,6 +212,14 @@ def cmd_undo(args) -> int:
     return 0
 
 
+def cmd_tui(args) -> int:
+    """M5: read-only workspace dashboard (health + category distribution)."""
+    from organizer.tui import run_tui
+
+    run_tui(Path(args.db), Path(args.log), Path(args.prefs))
+    return 0
+
+
 def cmd_review(args) -> int:
     """Manually label a needs_review file and move it (G7)."""
     embedder = _build_embedder(args.real, args.consent)
@@ -274,6 +282,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("apply"); add_common(sp); sp.add_argument("--dest", default="organized"); sp.add_argument("--log", default=DEFAULT_LOG); sp.add_argument("--mode", default="trash", choices=[m.value for m in MoveMode]); sp.set_defaults(func=cmd_apply)
     sp = sub.add_parser("undo"); sp.add_argument("--log", default=DEFAULT_LOG); sp.add_argument("-n", type=int, default=1); sp.set_defaults(func=cmd_undo)
     sp = sub.add_parser("review"); sp.add_argument("file"); sp.add_argument("label"); add_common(sp, need_dir=False); sp.add_argument("--dest", default="organized"); sp.add_argument("--log", default=DEFAULT_LOG); sp.add_argument("--mode", default="trash", choices=[m.value for m in MoveMode]); sp.set_defaults(func=cmd_review)
+    sp = sub.add_parser("tui"); sp.add_argument("--db", default=DEFAULT_DB); sp.add_argument("--log", default=DEFAULT_LOG); sp.add_argument("--prefs", default=DEFAULT_PREFS); sp.set_defaults(func=cmd_tui)
     return p
 
 

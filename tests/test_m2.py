@@ -63,6 +63,21 @@ class TestDatabase:
             row = db.get_by_path(str(f))
             assert row["category"] == "documents/personal"
 
+    def test_status_lifecycle_on_upsert(self, tmp_path):
+        """Classify-pass upserts derive status; scan upserts keep rec.status."""
+        f = tmp_path / "a.txt"; f.write_text("hi")
+        with Database(":memory:") as db:
+            db.migrate()
+            db.upsert(_rec(f))  # scan: no category kwarg
+            assert db.get_by_path(str(f))["status"] == "pending"
+            db.upsert(_rec(f), category="code/python", confidence=0.9)
+            assert db.get_by_path(str(f))["status"] == "classified"
+            db.upsert(_rec(f), category=None, confidence=0.1)  # gated out
+            assert db.get_by_path(str(f))["status"] == "needs_review"
+            db.upsert(_rec(f), category="code/python", confidence=0.9,
+                      status="confirmed")  # explicit override wins
+            assert db.get_by_path(str(f))["status"] == "confirmed"
+
     def test_tc_cache_1_skip_unchanged(self, tmp_path):
         """TC-CACHE-1: an unchanged, classified file is reported cached."""
         f = tmp_path / "a.txt"; f.write_text("invoice total due")

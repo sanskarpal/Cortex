@@ -151,6 +151,7 @@ class Database:
         category: str | None = None,
         confidence: float | None = None,
         content_hash: str | None = None,
+        status: str | None = None,
     ) -> int:
         """Insert or update the row for *rec*; return its row ``id``.
 
@@ -166,6 +167,18 @@ class Database:
         """
         # Defensively read content_hash from rec if present in a future version.
         effective_hash: str | None = content_hash or getattr(rec, "content_hash", None)
+
+        # Status lifecycle (DM-FileRecord): an explicit `status` argument wins;
+        # otherwise a classify-pass (category kwarg used) derives it, and a
+        # plain scan upsert keeps the record's own status.
+        if status is None:
+            if category is not None:
+                status = "classified"
+            elif confidence is not None:
+                # classify ran but produced no category -> needs_review
+                status = "needs_review"
+            else:
+                status = rec.status
 
         tier_int: int = rec.tier.value if isinstance(rec.tier, Tier) else (
             int(rec.tier) if rec.tier is not None else 0
@@ -200,7 +213,7 @@ class Database:
                 tier_int,
                 category,
                 confidence,
-                rec.status,
+                status,
             ),
         )
         self._conn.commit()
