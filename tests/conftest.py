@@ -26,6 +26,35 @@ if str(_SRC) not in sys.path:
 
 
 # ---------------------------------------------------------------------------
+# Shared test double — records every embed call (used by test_m1 and
+# test_m1_contracts to assert space isolation / no-embedding contracts).
+# ---------------------------------------------------------------------------
+
+from organizer.embedding import FakeEmbeddingService  # noqa: E402 — after bootstrap
+
+
+class RecordingEmbeddingService(FakeEmbeddingService):
+    """Wraps FakeEmbeddingService and records every embed_text / embed_image call."""
+
+    def __init__(self, dim: int = 64) -> None:
+        super().__init__(dim)
+        self.text_calls: list[str] = []
+        self.image_calls: list[pathlib.Path] = []
+
+    def embed_text(self, text: str):  # type: ignore[override]
+        self.text_calls.append(text)
+        return super().embed_text(text)
+
+    def embed_image(self, path: pathlib.Path):  # type: ignore[override]
+        self.image_calls.append(path)
+        return super().embed_image(path)
+
+    @property
+    def total_calls(self) -> int:
+        return len(self.text_calls) + len(self.image_calls)
+
+
+# ---------------------------------------------------------------------------
 # Minimal valid 1×1 PNG blob (stdlib only, no Pillow).
 #
 # A PNG file is: 8-byte signature + IHDR chunk + IDAT chunk + IEND chunk.

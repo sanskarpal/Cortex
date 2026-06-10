@@ -27,20 +27,22 @@ from organizer.types import EmbeddingSpace
 # temperature is needed to turn small cosine gaps into meaningful probability
 # separation. bge cosines are already well spread.
 # NOTE: these defaults were tuned on a 14-file public-sample eval (real photos,
-# screenshots, source code, prose) — illustrative, NOT production-calibrated.
-# A real calibration set (§12 benchmarking) should refit them.
+# screenshots, source code, prose) against the 13-category config/categories.yaml
+# taxonomy — illustrative, NOT production-calibrated. A real calibration set
+# (§12 benchmarking) should refit them. Confidence spreads thinner as the
+# category count grows, so retune whenever the taxonomy changes materially.
 DEFAULT_TEMPERATURE: dict[EmbeddingSpace, float] = {
-    EmbeddingSpace.BGE: 0.02,
-    EmbeddingSpace.CLIP: 0.02,
+    EmbeddingSpace.BGE: 0.015,
+    EmbeddingSpace.CLIP: 0.015,
 }
 
 # Per-space auto-move gate. Below this calibrated confidence -> needs_review.
-# Conservative by design (safety > recall, §7): on the eval this passed all 10
-# correctly-classified files and routed all 3 misclassified photos to review,
-# with zero confidently-wrong auto-moves.
+# Conservative by design (safety > recall, §7): on the 13-cat eval this gave
+# bge 5 correct / 0 wrong / 0 review and clip 2 correct / 0 wrong / 6 review —
+# zero confidently-wrong auto-moves in both spaces.
 DEFAULT_MIN_CONFIDENCE: dict[EmbeddingSpace, float] = {
-    EmbeddingSpace.BGE: 0.50,
-    EmbeddingSpace.CLIP: 0.40,
+    EmbeddingSpace.BGE: 0.40,
+    EmbeddingSpace.CLIP: 0.60,
 }
 
 

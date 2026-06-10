@@ -21,3 +21,7 @@ ruvector.db
 
 # Models / caches
 *.onnx
+
+# AgentDB runtime artifacts
+agentdb.rvf
+agentdb.rvf.lock

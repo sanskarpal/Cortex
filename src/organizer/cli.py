@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from organizer.classify import classify
 from organizer.config import ConfigLoader
 from organizer.database import Database
+from organizer.rules import RuleEngine
 from organizer.embedding import (
     FakeEmbeddingService,
     SentenceTransformerEmbeddingService,
@@ -101,11 +102,27 @@ def cmd_scan(args) -> int:
     return 0
 
 
+def _classify_hybrid(rec, rule_engine, taxonomy, embedder, gate: bool):
+    """Rule layer first (§4.2 layer 1, M3 hybrid), then embedding classifier."""
+    from organizer.types import Classification
+
+    verdict = rule_engine.apply(rec) if rule_engine is not None else None
+    if verdict is not None:
+        return Classification(
+            cat_id=verdict.cat_id,
+            cosine=0.0,  # not embedding-derived
+            source="rule",
+            confidence=verdict.confidence,
+        )
+    return classify(extract(rec), taxonomy, embedder, gate=gate)
+
+
 def cmd_classify(args) -> int:
     db_path = Path(args.db)
     _ensure_parent(db_path)
     embedder = _build_embedder(args.real, args.consent)
-    _, taxonomy = _load_taxonomy(Path(args.config), embedder)
+    cfg, taxonomy = _load_taxonomy(Path(args.config), embedder)
+    rule_engine = RuleEngine(cfg.categories)
     n = classified = 0
     with Database(db_path) as db:
         db.migrate()
@@ -113,8 +130,7 @@ def cmd_classify(args) -> int:
             n += 1
             if args.cache and db.is_cached(rec, by_content=False):
                 continue  # cache-first skip (§6, TC-CACHE-1)
-            feats = extract(rec)
-            res = classify(feats, taxonomy, embedder, gate=args.gate)
+            res = _classify_hybrid(rec, rule_engine, taxonomy, embedder, args.gate)
             db.upsert(rec, category=res.cat_id, confidence=res.confidence)
             if res.cat_id is not None:
                 classified += 1
@@ -122,15 +138,14 @@ def cmd_classify(args) -> int:
     return 0
 
 
-def _plan_from_scan(args, embedder, taxonomy):
+def _plan_from_scan(args, embedder, taxonomy, rule_engine=None):
     planner = Planner(Path(args.dest))
     items = []
     for rec in scan(Path(args.directory)):
         if rec.tier is Tier.REVIEW:
             items.append((rec, _needs_review_cls()))
             continue
-        feats = extract(rec)
-        res = classify(feats, taxonomy, embedder, gate=args.gate)
+        res = _classify_hybrid(rec, rule_engine, taxonomy, embedder, args.gate)
         items.append((rec, res))
     return planner.plan(items)
 
@@ -143,8 +158,8 @@ def _needs_review_cls():
 
 def cmd_preview(args) -> int:
     embedder = _build_embedder(args.real, args.consent)
-    _, taxonomy = _load_taxonomy(Path(args.config), embedder)
-    plan = _plan_from_scan(args, embedder, taxonomy)
+    cfg, taxonomy = _load_taxonomy(Path(args.config), embedder)
+    plan = _plan_from_scan(args, embedder, taxonomy, RuleEngine(cfg.categories))
     for op in plan.moves:
         print(f"  MOVE  {op.src}\n     -> {op.dst}  [{op.mode.value} conf={op.confidence:.2f}]")
     for p in plan.needs_review:
@@ -155,8 +170,8 @@ def cmd_preview(args) -> int:
 
 def cmd_apply(args) -> int:
     embedder = _build_embedder(args.real, args.consent)
-    _, taxonomy = _load_taxonomy(Path(args.config), embedder)
-    plan = _plan_from_scan(args, embedder, taxonomy)
+    cfg, taxonomy = _load_taxonomy(Path(args.config), embedder)
+    plan = _plan_from_scan(args, embedder, taxonomy, RuleEngine(cfg.categories))
     for op in plan.moves:  # explicit user invocation == approval (§7.1)
         op.approved = True
     log_path = Path(args.log)
@@ -196,7 +211,19 @@ def cmd_review(args) -> int:
     entries = Executor().apply(
         Plan(moves=[op]), mode=MoveMode(args.mode), history=History(log_path), dry_run=False
     )
-    print(f"reviewed {src} -> {args.label} ({len(entries)} moved)")
+    # G7: manual label exits needs_review AND feeds the preference store (§4.4).
+    import time
+
+    from organizer.preferences import FeedbackEvent, PreferenceStore
+
+    prefs_path = log_path.parent / "preferences.jsonl"
+    PreferenceStore(prefs_path).record(
+        FeedbackEvent(
+            file_path=str(src), from_cat=None, to_cat=args.label,
+            action="override", ts=time.time(),
+        )
+    )
+    print(f"reviewed {src} -> {args.label} ({len(entries)} moved; feedback recorded)")
     return 0
 
 
