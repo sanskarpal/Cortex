@@ -1,0 +1,212 @@
+# categories.yaml — AI File Organizer taxonomy configuration
+#
+# §5: This file is the YAML-driven taxonomy consumed by ConfigLoader /
+# TaxonomyStore (ARCHITECTURE-EXTENSION.md §2). All entries MUST be leaf
+# categories only (G5: "classification operates on leaf categories only;
+# parents are pure path prefixes derived from destination").
+#
+# Schema per entry:
+#   cat_id        (str, required)  — leaf id, e.g. "documents/invoices"
+#   match         (list[str], required, non-empty) — natural-language prompt
+#                 strings used for embedding comparison (§4.2 / §5)
+#   min_confidence (float, required) — cosine-based confidence gate for
+#                 auto-move (§7.2 / §5); must be in [0, 1]
+#   destination   (str, optional)  — relative target path; defaults to cat_id
+#                 if absent (G5)
+#   rules         (dict, optional) — optional rule-layer hints (§4.2 rule layer)
+#     extensions      (list[str]) — lowercase extensions including the dot
+#     path_keywords   (list[str]) — substring matches against the source path
+
+# ---------------------------------------------------------------------------
+# Scan settings (§7.5 exclusion rules, TC-SAFE-6)
+# ---------------------------------------------------------------------------
+scan:
+  excludes:
+    - .git
+    - node_modules
+    - __pycache__
+    - .venv
+  # Sensitive directories never auto-moved even at high confidence (§7.5)
+  sensitive_excludes:
+    - ~/Library/Mail
+
+# ---------------------------------------------------------------------------
+# Defaults (G1: trash semantics; G6: content_cache weak-guarantee)
+# ---------------------------------------------------------------------------
+defaults:
+  # G1: "trash" = recoverable-by-default move. True unrecoverable move
+  # requires explicit --hard (ARCHITECTURE-EXTENSION.md G1).
+  move_mode: trash
+  # G6: content_cache=false means cache key falls back to (path, size, mtime).
+  # This is a weaker deduplication guarantee; a warning is surfaced at runtime.
+  content_cache: false
+
+# ---------------------------------------------------------------------------
+# Leaf categories (G5 — leaf-only; parent segments are path prefixes only)
+# ---------------------------------------------------------------------------
+categories:
+
+  # -- documents/ ----------------------------------------------------------
+
+  - cat_id: documents/invoices
+    match:
+      - "invoice for services rendered"
+      - "billing statement with total amount due"
+      - "purchase order or payment request"
+      - "vendor invoice with line items and tax"
+    min_confidence: 0.60
+    destination: documents/invoices
+    rules:
+      extensions: [.pdf, .docx, .doc, .txt]
+      path_keywords: [invoice, billing, statement, vendor]
+
+  - cat_id: documents/receipts
+    match:
+      - "payment receipt or proof of purchase"
+      - "store receipt with items and total paid"
+      - "transaction confirmation or payment acknowledgement"
+      - "receipt from a shop or online order"
+    min_confidence: 0.60
+    destination: documents/receipts
+    rules:
+      extensions: [.pdf, .jpg, .jpeg, .png, .txt]
+      path_keywords: [receipt, purchase, transaction, order]
+
+  - cat_id: documents/contracts
+    match:
+      - "legal contract or agreement between parties"
+      - "signed agreement with terms and conditions"
+      - "service agreement or lease contract"
+      - "contract with clauses, obligations, and signatures"
+    min_confidence: 0.65
+    destination: documents/contracts
+    rules:
+      extensions: [.pdf, .docx, .doc]
+      path_keywords: [contract, agreement, lease, nda, terms]
+
+  - cat_id: documents/tax
+    match:
+      - "tax return or income tax filing"
+      - "W-2 or 1099 tax form"
+      - "tax document or financial statement for filing"
+      - "government tax form with deductions and income"
+    min_confidence: 0.65
+    destination: documents/tax
+    rules:
+      extensions: [.pdf, .docx, .doc, .csv]
+      path_keywords: [tax, w2, 1099, irs, filing, return]
+
+  - cat_id: documents/personal
+    match:
+      - "personal letter or note written to someone"
+      - "private journal entry or diary"
+      - "personal identification document such as a passport or ID card"
+      - "personal correspondence or private message"
+    min_confidence: 0.55
+    destination: documents/personal
+    rules:
+      extensions: [.pdf, .docx, .doc, .txt, .md]
+      path_keywords: [personal, letter, journal, diary, correspondence]
+
+  # -- photos/ -------------------------------------------------------------
+
+  - cat_id: photos/screenshots
+    match:
+      - "screenshot of a computer screen or application window"
+      - "screen capture showing a user interface"
+      - "desktop screenshot with icons and taskbar"
+      - "screenshot of a website or software"
+    min_confidence: 0.60
+    destination: photos/screenshots
+    rules:
+      extensions: [.png, .jpg, .jpeg, .webp]
+      path_keywords: [screenshot, screen, capture, screenshare]
+
+  - cat_id: photos/travel
+    match:
+      - "travel photograph of a landmark or destination"
+      - "photo taken during a vacation or trip abroad"
+      - "outdoor scenery or tourist attraction photo"
+      - "landscape or cityscape from a journey"
+    min_confidence: 0.55
+    destination: photos/travel
+    rules:
+      extensions: [.jpg, .jpeg, .heic, .png, .raw, .webp]
+      path_keywords: [travel, trip, vacation, tour, abroad]
+
+  - cat_id: photos/personal
+    match:
+      - "personal photograph of a person or family"
+      - "photo taken at a social gathering or event"
+      - "portrait or selfie photo"
+      - "candid personal photo"
+    min_confidence: 0.50
+    destination: photos/personal
+    rules:
+      extensions: [.jpg, .jpeg, .heic, .png, .raw, .webp]
+      path_keywords: [photo, pic, selfie, portrait, family]
+
+  # -- code/ ---------------------------------------------------------------
+
+  - cat_id: code/python
+    match:
+      - "Python source code file with functions and classes"
+      - "Python script with import statements"
+      - "Jupyter notebook or Python module"
+      - "Python program with def and class keywords"
+    min_confidence: 0.70
+    destination: code/python
+    rules:
+      extensions: [.py, .pyw, .ipynb]
+      path_keywords: [python, script, notebook]
+
+  - cat_id: code/javascript
+    match:
+      - "JavaScript source code with functions and variables"
+      - "Node.js module or browser script"
+      - "TypeScript or JavaScript file with async and await"
+      - "JavaScript file with import export statements"
+    min_confidence: 0.70
+    destination: code/javascript
+    rules:
+      extensions: [.js, .ts, .mjs, .cjs, .jsx, .tsx]
+      path_keywords: [javascript, typescript, node, npm, react]
+
+  # -- media/ --------------------------------------------------------------
+
+  - cat_id: media/music
+    match:
+      - "music audio file or song recording"
+      - "mp3 or audio track with artist and title"
+      - "podcast episode or spoken word audio"
+      - "music album track or sound recording"
+    min_confidence: 0.65
+    destination: media/music
+    rules:
+      extensions: [.mp3, .flac, .aac, .m4a, .ogg, .wav]
+      path_keywords: [music, song, album, track, audio, podcast]
+
+  # -- downloads/ ----------------------------------------------------------
+
+  - cat_id: downloads/archives
+    match:
+      - "compressed archive file such as zip or tar"
+      - "downloaded archive containing multiple files"
+      - "software package or installer archive"
+    min_confidence: 0.70
+    destination: downloads/archives
+    rules:
+      extensions: [.zip, .tar, .gz, .bz2, .7z, .rar, .xz, .tgz]
+      path_keywords: [archive, backup, bundle, package]
+
+  - cat_id: downloads/installers
+    match:
+      - "software installer or application setup file"
+      - "executable installer or disk image for an application"
+      - "program installer downloaded from the internet"
+      - "setup wizard or application bundle for installation"
+    min_confidence: 0.70
+    destination: downloads/installers
+    rules:
+      extensions: [.dmg, .pkg, .exe, .msi, .deb, .rpm, .appimage]
+      path_keywords: [install, setup, installer, download]

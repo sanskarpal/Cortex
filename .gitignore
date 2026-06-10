@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# OS
+.DS_Store
+
+# Organizer runtime state (generated)
+.organizer/
+
+# Ruflo / claude-flow tooling state (generated, large)
+.claude-flow/
+.swarm/
+ruvector.db
+.claude/memory.db
+.claude/settings.local.json
+
+# Models / caches
+*.onnx
