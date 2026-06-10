@@ -17,6 +17,8 @@ Key invariants enforced here:
 
 from __future__ import annotations
 
+from typing import Callable
+
 from organizer.calibrate import min_confidence_for, softmax_confidence
 from organizer.embedding import EmbeddingService, cosine
 from organizer.types import (
@@ -37,6 +39,7 @@ def classify(
     taxonomy: list[CategoryPrompt],
     embedder: EmbeddingService,
     gate: bool = False,
+    bias_fn: "Callable[[str], float] | None" = None,
 ) -> Classification:
     """Classify one file against the pre-built taxonomy.
 
@@ -98,8 +101,9 @@ def classify(
     # Per-category score = max cosine over its prompts (§4.2, TC-MODEL-1).
     # ------------------------------------------------------------------ #
     best_cat_id: str | None = None
-    best_cosine: float = -1.0  # cosine ∈ [-1, 1]; initialise below min
-    scores: list[float] = []   # all per-category scores, for calibration (G4)
+    best_raw: float = -1.0     # raw cosine of the winner (DM-Classification)
+    best_biased: float = -2.0  # biased score used for selection
+    scores: list[float] = []   # biased per-category scores, for calibration (G4)
 
     for category in taxonomy:
         space_vecs = category.prompt_vecs.get(space)
@@ -108,12 +112,19 @@ def classify(
             # risk an empty-max or cross-space comparison.
             continue
 
-        # Category score = max cosine across the category's prompt vectors.
-        cat_score = max(cosine(file_vec, pvec) for pvec in space_vecs)
-        scores.append(cat_score)
+        # Raw category score = max cosine across the category's prompt vectors.
+        raw = max(cosine(file_vec, pvec) for pvec in space_vecs)
 
-        if cat_score > best_cosine:
-            best_cosine = cat_score
+        # User-adaptation layer (§4.2(4), M4): add the clamped preference bias
+        # (PreferenceStore.bias ∈ [-0.10, +0.10]) before argmax and before the
+        # softmax, so accumulated feedback shifts both the selected category
+        # and its calibrated confidence. The raw cosine is reported unchanged.
+        biased = raw + (bias_fn(category.cat_id) if bias_fn is not None else 0.0)
+        scores.append(biased)
+
+        if biased > best_biased:
+            best_biased = biased
+            best_raw = raw
             best_cat_id = category.cat_id
 
     # ------------------------------------------------------------------ #
@@ -132,14 +143,14 @@ def classify(
     if gate and confidence < min_confidence_for(space):
         return Classification(
             cat_id=None,
-            cosine=best_cosine,
+            cosine=best_raw,
             source="needs_review",
             confidence=confidence,
         )
 
     return Classification(
         cat_id=best_cat_id,
-        cosine=best_cosine,
+        cosine=best_raw,
         source="embedding",
         confidence=confidence,
     )

@@ -109,3 +109,60 @@ class TestClassifyGating:
         assert res.source == "needs_review"
         assert res.cat_id is None
         assert res.confidence == pytest.approx(1.0 / 4.0, abs=1e-6)
+
+
+class TestClassifyPreferenceBias:
+    """Preference bias (§4.2(4), M4) shifts argmax and confidence in classify()."""
+
+    def _tied_taxonomy(self, emb: FakeEmbeddingService) -> list[CategoryPrompt]:
+        """Two categories with identical prompts -> exact cosine tie."""
+        cats = [CategoryPrompt(cat_id=c, match=["same"]) for c in ("cat/a", "cat/b")]
+        for cp in cats:
+            cp.prompt_vecs[EmbeddingSpace.BGE] = [
+                emb.embed_prompt("same", EmbeddingSpace.BGE)
+            ]
+        return cats
+
+    def _features(self) -> FileFeatures:
+        return FileFeatures(modality=Modality.TEXT, text="anything")
+
+    def test_positive_bias_breaks_tie(self):
+        emb = FakeEmbeddingService()
+        tax = self._tied_taxonomy(emb)
+        bias = {"cat/a": 0.0, "cat/b": 0.02}
+        res = classify(self._features(), tax, emb, bias_fn=lambda c: bias[c])
+        assert res.cat_id == "cat/b"
+
+    def test_negative_bias_pushes_away(self):
+        emb = FakeEmbeddingService()
+        tax = self._tied_taxonomy(emb)
+        bias = {"cat/a": 0.0, "cat/b": -0.02}
+        res = classify(self._features(), tax, emb, bias_fn=lambda c: bias[c])
+        assert res.cat_id == "cat/a"
+
+    def test_no_bias_fn_unchanged_behavior(self):
+        """bias_fn=None must reproduce the plain argmax result exactly."""
+        emb = FakeEmbeddingService()
+        tax = build_taxonomy(emb)
+        plain = classify(self._features(), tax, emb)
+        with_zero = classify(self._features(), tax, emb, bias_fn=lambda c: 0.0)
+        assert plain.cat_id == with_zero.cat_id
+        assert plain.cosine == pytest.approx(with_zero.cosine)
+        assert plain.confidence == pytest.approx(with_zero.confidence)
+
+    def test_reported_cosine_stays_raw(self):
+        """DM-Classification: cosine is the winner's RAW similarity, not biased."""
+        emb = FakeEmbeddingService()
+        tax = self._tied_taxonomy(emb)
+        biased = classify(self._features(), tax, emb, bias_fn=lambda c: 0.05)
+        unbiased = classify(self._features(), tax, emb)
+        assert biased.cosine == pytest.approx(unbiased.cosine)
+
+    def test_bias_raises_confidence_of_winner(self):
+        """Bias widens the winner's margin -> higher calibrated confidence."""
+        emb = FakeEmbeddingService()
+        tax = self._tied_taxonomy(emb)
+        bias = {"cat/a": 0.0, "cat/b": 0.05}
+        boosted = classify(self._features(), tax, emb, bias_fn=lambda c: bias[c])
+        flat = classify(self._features(), tax, emb)
+        assert boosted.confidence > flat.confidence

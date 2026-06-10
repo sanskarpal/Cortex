@@ -41,6 +41,7 @@ from organizer.types import MoveMode, Tier
 
 DEFAULT_DB = ".organizer/index.db"
 DEFAULT_LOG = ".organizer/oplog.jsonl"
+DEFAULT_PREFS = ".organizer/preferences.jsonl"
 DEFAULT_CONFIG = "config/categories.yaml"
 
 
@@ -102,7 +103,7 @@ def cmd_scan(args) -> int:
     return 0
 
 
-def _classify_hybrid(rec, rule_engine, taxonomy, embedder, gate: bool):
+def _classify_hybrid(rec, rule_engine, taxonomy, embedder, gate: bool, bias_fn=None):
     """Rule layer first (§4.2 layer 1, M3 hybrid), then embedding classifier."""
     from organizer.types import Classification
 
@@ -114,7 +115,25 @@ def _classify_hybrid(rec, rule_engine, taxonomy, embedder, gate: bool):
             source="rule",
             confidence=verdict.confidence,
         )
-    return classify(extract(rec), taxonomy, embedder, gate=gate)
+    return classify(extract(rec), taxonomy, embedder, gate=gate, bias_fn=bias_fn)
+
+
+def _build_bias_fn(prefs_path: Path, taxonomy):
+    """Precompute the per-category preference bias once per run (§4.2(4)).
+
+    PreferenceStore.bias re-reads the JSONL log per call, so we snapshot it
+    into a dict here rather than paying O(events) per file classified.
+    Returns None when no feedback has been recorded yet.
+    """
+    from organizer.preferences import PreferenceStore
+
+    if not prefs_path.exists():
+        return None
+    store = PreferenceStore(prefs_path)
+    table = {cp.cat_id: store.bias(cp.cat_id) for cp in taxonomy}
+    if not any(table.values()):
+        return None
+    return lambda cat_id: table.get(cat_id, 0.0)
 
 
 def cmd_classify(args) -> int:
@@ -123,6 +142,7 @@ def cmd_classify(args) -> int:
     embedder = _build_embedder(args.real, args.consent)
     cfg, taxonomy = _load_taxonomy(Path(args.config), embedder)
     rule_engine = RuleEngine(cfg.categories)
+    bias_fn = _build_bias_fn(Path(args.prefs), taxonomy)
     n = classified = 0
     with Database(db_path) as db:
         db.migrate()
@@ -130,7 +150,7 @@ def cmd_classify(args) -> int:
             n += 1
             if args.cache and db.is_cached(rec, by_content=False):
                 continue  # cache-first skip (§6, TC-CACHE-1)
-            res = _classify_hybrid(rec, rule_engine, taxonomy, embedder, args.gate)
+            res = _classify_hybrid(rec, rule_engine, taxonomy, embedder, args.gate, bias_fn)
             db.upsert(rec, category=res.cat_id, confidence=res.confidence)
             if res.cat_id is not None:
                 classified += 1
@@ -140,12 +160,13 @@ def cmd_classify(args) -> int:
 
 def _plan_from_scan(args, embedder, taxonomy, rule_engine=None):
     planner = Planner(Path(args.dest))
+    bias_fn = _build_bias_fn(Path(args.prefs), taxonomy)
     items = []
     for rec in scan(Path(args.directory)):
         if rec.tier is Tier.REVIEW:
             items.append((rec, _needs_review_cls()))
             continue
-        res = _classify_hybrid(rec, rule_engine, taxonomy, embedder, args.gate)
+        res = _classify_hybrid(rec, rule_engine, taxonomy, embedder, args.gate, bias_fn)
         items.append((rec, res))
     return planner.plan(items)
 
@@ -216,7 +237,8 @@ def cmd_review(args) -> int:
 
     from organizer.preferences import FeedbackEvent, PreferenceStore
 
-    prefs_path = log_path.parent / "preferences.jsonl"
+    prefs_path = Path(args.prefs)
+    _ensure_parent(prefs_path)
     PreferenceStore(prefs_path).record(
         FeedbackEvent(
             file_path=str(src), from_cat=None, to_cat=args.label,
@@ -242,6 +264,8 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--real", action="store_true", help="use real bge+clip models")
         sp.add_argument("--consent", action="store_true", help="consent to model load (G8)")
         sp.add_argument("--gate", action="store_true", help="confidence gating (G4)")
+        sp.add_argument("--prefs", default=DEFAULT_PREFS,
+                        help="preference feedback log feeding bias (§4.2(4))")
 
     sp = sub.add_parser("status"); sp.add_argument("--db", default=DEFAULT_DB); sp.set_defaults(func=cmd_status)
     sp = sub.add_parser("scan"); sp.add_argument("directory"); sp.add_argument("--db", default=DEFAULT_DB); sp.set_defaults(func=cmd_scan)
