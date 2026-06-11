@@ -26,12 +26,14 @@ classifiers = [
 dependencies = [
     "send2trash>=1.8",
     "PyYAML>=6.0",
+    "pymupdf>=1.24",
 ]
 
 [project.optional-dependencies]
 ml = [
     "sentence-transformers>=2.6",
     "Pillow>=10.0",
+    "pillow-heif>=0.16",
 ]
 tui = ["textual>=0.50"]
 dev = ["pytest>=8.0"]

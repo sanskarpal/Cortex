@@ -166,6 +166,8 @@ def cmd_classify(args) -> int:
         db.migrate()
         for rec in scan(Path(args.directory)):
             n += 1
+            if n % 100 == 0:
+                print(f"  ...{n} files processed", file=sys.stderr)
             if args.cache and db.is_cached(rec, by_content=False):
                 continue  # cache-first skip (§6, TC-CACHE-1)
             res = _classify_hybrid(rec, rule_engine, taxonomy, embedder, args.gate, bias_fn)
@@ -305,8 +307,29 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    if sys.platform == "win32":
+        print(
+            "error: Windows is not supported (macOS and Linux only).",
+            file=sys.stderr,
+        )
+        return 2
     args = build_parser().parse_args(argv)
-    return args.func(args)
+    try:
+        return args.func(args)
+    except KeyboardInterrupt:
+        print("\ninterrupted — no partial moves were left unlogged", file=sys.stderr)
+        return 130
+    except PermissionError as exc:
+        # Model-consent refusal (G8) or filesystem permissions.
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    except FileNotFoundError as exc:
+        print(f"error: not found: {exc.filename or exc}", file=sys.stderr)
+        return 2
+    except ValueError as exc:
+        # ConfigLoader validation errors etc. — show the message, not a trace.
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

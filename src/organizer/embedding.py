@@ -137,6 +137,16 @@ class SentenceTransformerEmbeddingService:
             return
         from sentence_transformers import SentenceTransformer  # lazy
 
+        # HEIC/HEIF (iPhone photos): register the Pillow opener when available
+        # so embed_image can decode them; without it those files fail to open
+        # and classify() routes them to needs_review.
+        try:
+            from pillow_heif import register_heif_opener  # lazy, optional
+
+            register_heif_opener()
+        except ImportError:
+            pass
+
         self._text_model = SentenceTransformer(self.TEXT_MODEL)
         self._image_model = SentenceTransformer(self.IMAGE_MODEL)
 

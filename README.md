@@ -20,7 +20,7 @@ pip install -e ".[ml,tui]"     # core + real AI models + dashboard
 # or just `pip install -e .` for the lightweight rules-only core
 ```
 
-Requires Python 3.11+. The ML extra pulls torch/sentence-transformers (~2 GB installed); model weights (~750 MB) download once, on first use, only with your explicit `--consent`.
+Requires Python 3.11+ on **macOS or Linux** (Windows is not supported). The ML extra pulls torch/sentence-transformers (~2 GB installed); model weights (~750 MB) download once, on first use, only with your explicit `--consent`. PDFs are classified by their extracted text layer (pymupdf); scanned PDFs without a text layer are held for review rather than guessed. HEIC iPhone photos are supported via the ML extra.
 
 ## Quickstart
 

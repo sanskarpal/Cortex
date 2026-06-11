@@ -50,6 +50,12 @@ def extract(rec: FileRecord, text_cap_bytes: int = 4096) -> FileFeatures:
 
     # ------------------------------------------------------------------ Tier 2
     if tier is Tier.TEXT:
+        # PDFs carry compressed binary streams; raw-byte reads embed garbage.
+        # Extract the real text layer via pymupdf when available (§4.3 "Text
+        # extraction: pymupdf"). Scanned PDFs without a text layer come back
+        # empty -> needs_review rather than a garbage classification.
+        if rec.extension == "pdf":
+            return _extract_pdf(rec, text_cap_bytes)
         return _extract_text(rec, text_cap_bytes)
 
     # ------------------------------------------------------------------ Tier 3
@@ -85,6 +91,65 @@ def extract(rec: FileRecord, text_cap_bytes: int = 4096) -> FileFeatures:
 # ---------------------------------------------------------------------------
 # Internal helpers — each returns FileFeatures and never raises
 # ---------------------------------------------------------------------------
+
+
+def _extract_pdf(rec: FileRecord, text_cap_bytes: int) -> FileFeatures:
+    """Extract the text layer of a PDF, capped at *text_cap_bytes* characters.
+
+    pymupdf is imported lazily so the stdlib-only paths stay import-light.
+    Failure modes all route to needs_review (never raise):
+      - pymupdf not installed        -> error="pdf_support_not_installed"
+      - corrupt / encrypted PDF      -> error="pdf_unreadable:..."
+      - no text layer (scanned doc)  -> error="pdf_no_text_layer" (OCR is out
+        of scope; §14 "leave these in needs_review rather than guessing")
+    """
+    try:
+        import fitz  # pymupdf — lazy
+    except ImportError:
+        return FileFeatures(
+            modality=Modality.NONE,
+            error="pdf_support_not_installed",
+            metadata={"hint": "pip install pymupdf"},
+        )
+
+    try:
+        text_parts: list[str] = []
+        remaining = text_cap_bytes
+        with fitz.open(rec.path) as doc:
+            if doc.needs_pass:
+                return FileFeatures(
+                    modality=Modality.NONE,
+                    error="pdf_encrypted",
+                    metadata={"pages": doc.page_count},
+                )
+            for page in doc:
+                if remaining <= 0:
+                    break
+                chunk = page.get_text("text")[:remaining]
+                text_parts.append(chunk)
+                remaining -= len(chunk)
+            pages = doc.page_count
+        text = "".join(text_parts).strip()
+    except Exception as exc:  # noqa: BLE001 — never raise out of extract()
+        return FileFeatures(
+            modality=Modality.NONE,
+            error=f"pdf_unreadable:{type(exc).__name__}",
+            metadata={},
+        )
+
+    if not text:
+        # Scanned document with no text layer; OCR deferred (§12.4).
+        return FileFeatures(
+            modality=Modality.NONE,
+            error="pdf_no_text_layer",
+            metadata={"pages": pages},
+        )
+
+    return FileFeatures(
+        modality=Modality.TEXT,
+        text=text,
+        metadata={"pages": pages, "chars_extracted": len(text)},
+    )
 
 
 def _extract_text(rec: FileRecord, text_cap_bytes: int) -> FileFeatures:
