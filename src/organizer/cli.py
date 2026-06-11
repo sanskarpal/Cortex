@@ -45,6 +45,24 @@ DEFAULT_PREFS = ".organizer/preferences.jsonl"
 DEFAULT_CONFIG = "config/categories.yaml"
 
 
+def _resolve_config(path_str: str) -> Path:
+    """Resolve the taxonomy config robustly for installed usage.
+
+    Search order: the path as given (honors --config and a repo-checkout
+    `config/categories.yaml` relative to CWD), then the default taxonomy
+    bundled as package data — so `organizer` works from any directory after
+    `pip install` without a config file present.
+    """
+    p = Path(path_str)
+    if p.exists():
+        return p
+    if path_str == DEFAULT_CONFIG:
+        bundled = Path(__file__).resolve().parent / "data" / "categories.yaml"
+        if bundled.exists():
+            return bundled
+    return p  # let ConfigLoader raise its clear error for missing custom paths
+
+
 # --------------------------------------------------------------------------- #
 # Shared helpers
 # --------------------------------------------------------------------------- #
@@ -140,7 +158,7 @@ def cmd_classify(args) -> int:
     db_path = Path(args.db)
     _ensure_parent(db_path)
     embedder = _build_embedder(args.real, args.consent)
-    cfg, taxonomy = _load_taxonomy(Path(args.config), embedder)
+    cfg, taxonomy = _load_taxonomy(_resolve_config(args.config), embedder)
     rule_engine = RuleEngine(cfg.categories)
     bias_fn = _build_bias_fn(Path(args.prefs), taxonomy)
     n = classified = 0
@@ -179,7 +197,7 @@ def _needs_review_cls():
 
 def cmd_preview(args) -> int:
     embedder = _build_embedder(args.real, args.consent)
-    cfg, taxonomy = _load_taxonomy(Path(args.config), embedder)
+    cfg, taxonomy = _load_taxonomy(_resolve_config(args.config), embedder)
     plan = _plan_from_scan(args, embedder, taxonomy, RuleEngine(cfg.categories))
     for op in plan.moves:
         print(f"  MOVE  {op.src}\n     -> {op.dst}  [{op.mode.value} conf={op.confidence:.2f}]")
@@ -191,7 +209,7 @@ def cmd_preview(args) -> int:
 
 def cmd_apply(args) -> int:
     embedder = _build_embedder(args.real, args.consent)
-    cfg, taxonomy = _load_taxonomy(Path(args.config), embedder)
+    cfg, taxonomy = _load_taxonomy(_resolve_config(args.config), embedder)
     plan = _plan_from_scan(args, embedder, taxonomy, RuleEngine(cfg.categories))
     for op in plan.moves:  # explicit user invocation == approval (§7.1)
         op.approved = True
@@ -223,7 +241,7 @@ def cmd_tui(args) -> int:
 def cmd_review(args) -> int:
     """Manually label a needs_review file and move it (G7)."""
     embedder = _build_embedder(args.real, args.consent)
-    _, _ = _load_taxonomy(Path(args.config), embedder)
+    _, _ = _load_taxonomy(_resolve_config(args.config), embedder)
     from organizer.types import Classification, MoveOp, Plan
 
     src = Path(args.file).resolve()

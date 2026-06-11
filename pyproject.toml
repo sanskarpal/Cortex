@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cortex-organizer"
+version = "0.1.0"
+description = "Privacy-first, locally-running AI file organizer: classifies files semantically and reorganizes them with dry-run, trash-default, undo-safe moves."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "Sanskar Pal" }]
+keywords = ["file-organizer", "clip", "embeddings", "local-ai", "privacy"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Desktop Environment :: File Managers",
+]
+
+# Core install is lightweight: scanning, rules, planning, trash-safe moves,
+# undo, SQLite index. ML models and the TUI are opt-in extras.
+dependencies = [
+    "send2trash>=1.8",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+ml = [
+    "sentence-transformers>=2.6",
+    "Pillow>=10.0",
+]
+tui = ["textual>=0.50"]
+dev = ["pytest>=8.0"]
+all = ["cortex-organizer[ml,tui,dev]"]
+
+[project.scripts]
+organizer = "organizer.cli:main"
+
+[project.urls]
+Repository = "https://github.com/sanskarpal/Cortex"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+organizer = ["data/*.yaml"]
