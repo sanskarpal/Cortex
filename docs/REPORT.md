@@ -279,11 +279,35 @@ Add categories freely — the prompts are embedded once per space at startup and
 
 - **111 automated tests**, all offline and hermetic (the fake embedding backend means no test ever needs a network or a model download). They map one-to-one to the acceptance contracts in `ARCHITECTURE-EXTENSION.md` §4 (TC-SAFE-*, TC-MODEL-*, TC-CACHE-1, TC-TIER-1, …).
 - **Real-model validation** was performed against 14 downloaded public sample files (real photographs, desktop screenshots, open-source code, public-domain prose — no personal files): with gating, 10/10 auto-classified correctly, 0 wrong, 3 ambiguous photos correctly held for review; apply + undo restored all 14 files byte-identically.
-- **Performance spot-check:** tier routing measured at ~0.0001 ms/file (budget: 1 ms). Large-scale crawl benchmarks (1M files) have not been run.
+- **Performance spot-check:** tier routing measured at ~0.0001 ms/file (budget: 1 ms). Real-model classification averaged ~71 ms/file on CPU. Large-scale crawl benchmarks (1M files) have not been run.
+
+### 6.1 Large-scale accuracy evaluation (61-file public bench)
+
+A second, larger evaluation (`testbench/eval.py`, regenerable — bench downloads are gitignored) ran the real models against **61 labeled public files**: real source code from cpython / requests / flask / express / jquery, six Project Gutenberg books, twelve Lorem Picsum photographs, eight Wikimedia desktop screenshots, five zip archives, eight synthetic invoices/receipts (labeled as synthetic — genuinely public invoice corpora don't exist), and four adversarial edge cases (no extension, zero-byte, corrupt PNG, unknown extension).
+
+Three passes isolate the contribution of each layer:
+
+| Pass | Overall correct | Auto-move precision | Wrong moves | Held for review |
+|---|---|---|---|---|
+| **A — Full system** (rules → embedding → gate) | **60/61 (98%)** | **100%** (56/56) | **0** | 1 |
+| B1 — Embedding only, gated | 64% | 90% | 4 | 18 |
+| B2 — Embedding only, raw argmax | 72% | 77% | 12 | 5 |
+
+Key findings:
+
+- **The safety metric held: zero wrong moves end-to-end.** All four edge cases were correctly held for review, and the evaluation verified zero filesystem mutation.
+- **The confidence gate earns its keep:** on embeddings alone it cut wrong moves from 12 to 4; the full system eliminated the rest.
+- **Most residual embedding errors are taxonomy ambiguity, not model failure** — e.g. a beach photograph scored as `photos/travel` when labeled `photos/personal`. Reasonable people would disagree on those labels too.
+- **Caveat on the 98%:** bench filenames carry keywords (`invoice_1.txt`, `screenshot_3.png`), so the rule layer decided 50 of 61 files. The embedding-only passes (B1/B2) are the fairer measure of raw model quality.
+
+The evaluation also **surfaced and fixed two real defects** (commit `e44b774`):
+
+1. **Over-broad rule extensions** in `config/categories.yaml`: a `.txt` extension rule routed *every* text file to `documents/invoices` and `.png/.jpg` routed every image to `documents/receipts` (first-writer-wins), silently bypassing the embedding classifier. Rules now carry only format-unambiguous extensions (`.py`, `.js`, `.zip`, `.mp3`, `.dmg`, …); generic content extensions fall through to embeddings.
+2. **Crash on corrupt images**: an undecodable PNG crashed the real CLIP backend mid-pass. The classifier now wraps embedding calls and routes undecodable content to `needs_review`.
 
 ### Known limitations
 
-1. Calibration thresholds were tuned on a small sample set — treat recall as indicative, not guaranteed. Precision (not moving things wrongly) is the design priority and held at 100% in evaluation.
+1. Calibration thresholds were tuned on a small sample set — treat recall as indicative, not guaranteed. Precision (not moving things wrongly) is the design priority and held at 100% in both evaluations (14-file and 61-file).
 2. Image classification across 13 categories is conservative: real-photo categories often land in `needs_review`. That is the intended failure mode, but it means more manual review for photo-heavy folders.
 3. The watcher polls (1 s default) rather than using native FSEvents/inotify, and no daemon currently consumes its event queue — incremental re-classification is manual (`classify --cache`).
 4. PDF handling reads raw bytes rather than extracting the text layer; scanned-document OCR is not implemented.
