@@ -57,7 +57,6 @@ categories:
     min_confidence: 0.60
     destination: documents/invoices
     rules:
-      extensions: [.pdf, .docx, .doc, .txt]
       path_keywords: [invoice, billing, statement, vendor]
 
   - cat_id: documents/receipts
@@ -69,7 +68,6 @@ categories:
     min_confidence: 0.60
     destination: documents/receipts
     rules:
-      extensions: [.pdf, .jpg, .jpeg, .png, .txt]
       path_keywords: [receipt, purchase, transaction, order]
 
   - cat_id: documents/contracts
@@ -81,7 +79,6 @@ categories:
     min_confidence: 0.65
     destination: documents/contracts
     rules:
-      extensions: [.pdf, .docx, .doc]
       path_keywords: [contract, agreement, lease, nda, terms]
 
   - cat_id: documents/tax
@@ -93,7 +90,6 @@ categories:
     min_confidence: 0.65
     destination: documents/tax
     rules:
-      extensions: [.pdf, .docx, .doc, .csv]
       path_keywords: [tax, w2, 1099, irs, filing, return]
 
   - cat_id: documents/personal
@@ -105,7 +101,6 @@ categories:
     min_confidence: 0.55
     destination: documents/personal
     rules:
-      extensions: [.pdf, .docx, .doc, .txt, .md]
       path_keywords: [personal, letter, journal, diary, correspondence]
 
   # -- photos/ -------------------------------------------------------------
@@ -119,7 +114,6 @@ categories:
     min_confidence: 0.60
     destination: photos/screenshots
     rules:
-      extensions: [.png, .jpg, .jpeg, .webp]
       path_keywords: [screenshot, screen, capture, screenshare]
 
   - cat_id: photos/travel
@@ -131,7 +125,6 @@ categories:
     min_confidence: 0.55
     destination: photos/travel
     rules:
-      extensions: [.jpg, .jpeg, .heic, .png, .raw, .webp]
       path_keywords: [travel, trip, vacation, tour, abroad]
 
   - cat_id: photos/personal
@@ -143,7 +136,6 @@ categories:
     min_confidence: 0.50
     destination: photos/personal
     rules:
-      extensions: [.jpg, .jpeg, .heic, .png, .raw, .webp]
       path_keywords: [photo, pic, selfie, portrait, family]
 
   # -- code/ ---------------------------------------------------------------

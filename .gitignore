@@ -25,3 +25,6 @@ ruvector.db
 # AgentDB runtime artifacts
 agentdb.rvf
 agentdb.rvf.lock
+
+# Test bench downloads (public sample files, regenerable via testbench/eval.py)
+testbench/files/

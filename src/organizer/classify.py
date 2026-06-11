@@ -87,14 +87,20 @@ def classify(
     # ------------------------------------------------------------------ #
     # Step 3: embed the file content into the correct space only.
     # ------------------------------------------------------------------ #
-    if features.modality is Modality.TEXT:
-        # BGE space — embed the extracted text snippet (or empty string if
-        # extraction yielded nothing; cosine against prompts will be low but
-        # deterministic rather than crashing).
-        file_vec = embedder.embed_text(features.text or "")
-    else:
-        # Modality.IMAGE -> CLIP space (G3: clip-ViT-B-32, not CurrencyCLIP).
-        file_vec = embedder.embed_image(features.image_path)  # type: ignore[arg-type]
+    try:
+        if features.modality is Modality.TEXT:
+            # BGE space — embed the extracted text snippet (or empty string if
+            # extraction yielded nothing; cosine against prompts will be low
+            # but deterministic rather than crashing).
+            file_vec = embedder.embed_text(features.text or "")
+        else:
+            # Modality.IMAGE -> CLIP space (G3: clip-ViT-B-32, not CurrencyCLIP).
+            file_vec = embedder.embed_image(features.image_path)  # type: ignore[arg-type]
+    except Exception:
+        # Corrupt/undecodable content (e.g. a broken image the real CLIP
+        # backend cannot open) routes to needs_review instead of crashing the
+        # pass (M1 done-criterion 8 applied at system level).
+        return _NEEDS_REVIEW
 
     # ------------------------------------------------------------------ #
     # Step 4: score file_vec against ONLY this space's prompt vectors.
