@@ -10,6 +10,8 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+import pytest
+
 from organizer.database import Database
 from organizer.tui import (
     WorkspaceStats,
@@ -98,6 +100,7 @@ class TestRenderers:
 class TestPilotSmoke:
     def test_app_mounts_and_populates(self, tmp_path):
         """Headless Textual pilot: widgets mount and show the seeded data."""
+        pytest.importorskip("textual", reason="textual extra not installed")
         from organizer.tui import build_app
         from textual.widgets import Static
 
