@@ -138,7 +138,17 @@ def _extract_pdf(rec: FileRecord, text_cap_bytes: int) -> FileFeatures:
         )
 
     if not text:
-        # Scanned document with no text layer; OCR deferred (§12.4).
+        # Scanned document with no text layer — try the optional OCR path
+        # (§4.3 "Image OCR: tesseract"); held for review if OCR unavailable
+        # or yields nothing (§14: never guess).
+        ocr_text = _ocr_pdf(rec.path, text_cap_bytes)
+        if ocr_text:
+            return FileFeatures(
+                modality=Modality.TEXT,
+                text=ocr_text,
+                metadata={"pages": pages, "chars_extracted": len(ocr_text),
+                          "source": "ocr"},
+            )
         return FileFeatures(
             modality=Modality.NONE,
             error="pdf_no_text_layer",
@@ -150,6 +160,37 @@ def _extract_pdf(rec: FileRecord, text_cap_bytes: int) -> FileFeatures:
         text=text,
         metadata={"pages": pages, "chars_extracted": len(text)},
     )
+
+
+def _ocr_pdf(path: Path, text_cap_bytes: int, max_pages: int = 2) -> str | None:
+    """OCR the first pages of a scanned PDF via tesseract (optional path).
+
+    Lazy imports keep pytesseract/Pillow optional ([ocr] extra + the system
+    `tesseract` binary). Any failure — missing deps, missing binary, OCR
+    error — returns None so the caller falls back to needs_review.
+    """
+    try:
+        import io
+
+        import fitz  # already present when this is reached
+        import pytesseract
+        from PIL import Image
+
+        out: list[str] = []
+        remaining = text_cap_bytes
+        with fitz.open(path) as doc:
+            for page in list(doc)[:max_pages]:
+                if remaining <= 0:
+                    break
+                pix = page.get_pixmap(dpi=200)
+                img = Image.open(io.BytesIO(pix.tobytes("png")))
+                chunk = pytesseract.image_to_string(img)[:remaining]
+                out.append(chunk)
+                remaining -= len(chunk)
+        text = "".join(out).strip()
+        return text or None
+    except Exception:  # noqa: BLE001 — OCR is best-effort, never fatal
+        return None
 
 
 def _extract_text(rec: FileRecord, text_cap_bytes: int) -> FileFeatures:

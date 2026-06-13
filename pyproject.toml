@@ -36,8 +36,11 @@ ml = [
     "pillow-heif>=0.16",
 ]
 tui = ["textual>=0.50"]
+# OCR for scanned PDFs; also requires the system `tesseract` binary
+# (e.g. `brew install tesseract`).
+ocr = ["pytesseract>=0.3.10", "Pillow>=10.0"]
 dev = ["pytest>=8.0"]
-all = ["cortex-organizer[ml,tui,dev]"]
+all = ["cortex-organizer[ml,tui,ocr,dev]"]
 
 [project.scripts]
 organizer = "organizer.cli:main"

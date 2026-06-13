@@ -65,3 +65,44 @@ class TestPdfExtraction:
         feats = extract(_pdf_rec(p))
         assert feats.modality is Modality.NONE
         assert feats.error is not None  # pdf_unreadable:* or no_text_layer
+
+
+class TestPdfOcr:
+    """OCR fallback for scanned PDFs (optional [ocr] extra + tesseract binary)."""
+
+    def _tesseract_available(self) -> bool:
+        try:
+            import pytesseract
+
+            pytesseract.get_tesseract_version()
+            return True
+        except Exception:
+            return False
+
+    def test_scanned_pdf_with_rendered_text_is_ocrd(self, tmp_path):
+        if not self._tesseract_available():
+            pytest.skip("tesseract not installed")
+        # Build a "scan": render a text page to an image, embed image in a
+        # fresh PDF so there is no text layer — only pixels.
+        src = fitz.open(); page = src.new_page()
+        page.insert_text((72, 144), "INVOICE TOTAL AMOUNT DUE 4500 DOLLARS",
+                         fontsize=24)
+        pix = page.get_pixmap(dpi=200)
+        src.close()
+        scan = fitz.open(); spage = scan.new_page()
+        spage.insert_image(spage.rect, pixmap=pix)
+        p = tmp_path / "scan.pdf"
+        scan.save(p); scan.close()
+
+        feats = extract(_pdf_rec(p))
+        assert feats.modality is Modality.TEXT
+        assert feats.metadata.get("source") == "ocr"
+        assert "INVOICE" in feats.text.upper()
+
+    def test_blank_scan_still_needs_review(self, tmp_path):
+        # Blank page has nothing to OCR -> needs_review regardless of tesseract.
+        doc = fitz.open(); doc.new_page(); p = tmp_path / "blank.pdf"
+        doc.save(p); doc.close()
+        feats = extract(_pdf_rec(p))
+        assert feats.modality is Modality.NONE
+        assert feats.error == "pdf_no_text_layer"
