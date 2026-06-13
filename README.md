@@ -2,6 +2,8 @@
 
 Cortex scans a folder, understands what each file *is* — an invoice, source code, a screenshot, a personal photo, a book — and reorganizes it into a clean category structure. Everything runs **locally**: two small open-weight models (bge text embeddings + CLIP vision), no cloud, no telemetry, nothing leaves your machine.
 
+**▶ [Interactive explainer & live demo →](https://sanskarpal.github.io/Cortex/)** — see it work in your browser, no install needed.
+
 It is built safety-first:
 
 - **Dry-run by default** — you always see the full plan before anything moves.
@@ -9,18 +11,19 @@ It is built safety-first:
 - **Recoverable** — moves use trash-backed semantics, never overwrite, and every action lands in an append-only log with a state-verified `undo`.
 - **Learns from you** — manually labeling a held-back file feeds a preference bias into future runs.
 
-> **Status: alpha.** Solid for technical users; see [docs/REPORT.md](docs/REPORT.md) §6 for honest evaluation results and known limitations (PDF text extraction is the big one).
+> **Status: alpha (v0.1.0).** Solid for technical users; see [docs/REPORT.md](docs/REPORT.md) §6 for honest evaluation results and known limitations (conservative photo recall is the main one — many photos are held for review rather than guessed).
 
 ## Install
 
 ```bash
 git clone https://github.com/sanskarpal/Cortex.git
 cd Cortex
-pip install -e ".[ml,tui]"     # core + real AI models + dashboard
-# or just `pip install -e .` for the lightweight rules-only core
+pip install -e ".[ml,tui]"      # core + real AI models + dashboard
+# pip install -e ".[ml,tui,ocr]" # also OCR scanned PDFs (needs system tesseract)
+# pip install -e .                # lightweight rules-only core
 ```
 
-Requires Python 3.11+ on **macOS or Linux** (Windows is not supported). The ML extra pulls torch/sentence-transformers (~2 GB installed); model weights (~750 MB) download once, on first use, only with your explicit `--consent`. PDFs are classified by their extracted text layer (pymupdf); scanned PDFs without a text layer are held for review rather than guessed. HEIC iPhone photos are supported via the ML extra.
+Requires Python 3.11+ on **macOS or Linux** (Windows is not supported). The ML extra pulls torch/sentence-transformers (~2 GB installed); model weights (~750 MB) download once, on first use, only with your explicit `--consent`. PDFs are classified by their extracted text layer (pymupdf); scanned PDFs are OCR'd when the optional `[ocr]` extra and the system `tesseract` binary are present (`brew install tesseract`), otherwise held for review. HEIC iPhone photos are supported via the ML extra.
 
 ## Quickstart
 
@@ -55,7 +58,7 @@ Four-stage local pipeline: stat-only scan → tiered feature extraction → hybr
 
 ```bash
 pip install -e ".[all]"
-python -m pytest tests/ -q     # 111 tests, fully offline, no model downloads
+python -m pytest tests/ -q     # 117 tests, fully offline, no model downloads
 ```
 
 ## License
