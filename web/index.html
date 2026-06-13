@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cortex — the AI that tidies your files, privately</title>
+<style>
+  :root{
+    --bg:#0b0f1a; --bg2:#111726; --card:#161d30; --line:#243049;
+    --ink:#eaf0ff; --mut:#9aa7c7; --dim:#6b7896;
+    --accent:#5b8cff; --accent2:#8a6bff; --good:#37d6a0; --warn:#ffb454;
+    --radius:18px; --shadow:0 20px 60px rgba(0,0,0,.45);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.7; overflow-x:hidden;
+  }
+  h1,h2,h3{line-height:1.15; letter-spacing:-.02em; margin:0 0 .4em}
+  p{margin:0 0 1.1em; color:var(--mut); font-size:1.08rem}
+  .wrap{max-width:1040px; margin:0 auto; padding:0 24px}
+  .accent{color:var(--accent)}
+  .grad{
+    background:linear-gradient(110deg,var(--accent),var(--accent2) 60%,var(--good));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .badge{
+    display:inline-block; font-size:.8rem; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--accent); border:1px solid var(--line); border-radius:999px;
+    padding:6px 14px; margin-bottom:22px; background:rgba(91,140,255,.07);
+  }
+
+  /* ---------- background aurora ---------- */
+  .aurora{position:fixed; inset:0; z-index:-1; overflow:hidden}
+  .blob{position:absolute; border-radius:50%; filter:blur(90px); opacity:.5; animation:drift 22s ease-in-out infinite}
+  .b1{width:520px;height:520px;background:#1f3a8a;top:-160px;left:-120px}
+  .b2{width:460px;height:460px;background:#5b2a8a;top:30%;right:-160px;animation-delay:-7s}
+  .b3{width:420px;height:420px;background:#0e5a47;bottom:-160px;left:30%;animation-delay:-13s}
+  @keyframes drift{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(40px,-30px) scale(1.1)}66%{transform:translate(-30px,40px) scale(.95)}}
+
+  /* ---------- hero ---------- */
+  header{min-height:100vh; display:flex; align-items:center; position:relative; padding:80px 0}
+  .hero-grid{display:grid; grid-template-columns:1.05fr .95fr; gap:48px; align-items:center}
+  h1{font-size:clamp(2.5rem,6vw,4.4rem); font-weight:800}
+  .lede{font-size:1.25rem; color:var(--mut); max-width:33ch}
+  .cta{display:flex; gap:14px; margin-top:30px; flex-wrap:wrap}
+  .btn{
+    border:none; cursor:pointer; font:inherit; font-weight:600; font-size:1rem;
+    padding:14px 26px; border-radius:999px; color:#fff; text-decoration:none;
+    background:linear-gradient(110deg,var(--accent),var(--accent2)); box-shadow:var(--shadow);
+    transition:transform .2s ease, box-shadow .2s ease;
+  }
+  .btn:hover{transform:translateY(-3px) scale(1.02)}
+  .btn.ghost{background:transparent; border:1px solid var(--line); color:var(--ink); box-shadow:none}
+
+  /* ---------- hero animation: files -> folder ---------- */
+  .stage{position:relative; height:380px}
+  .folder{
+    position:absolute; left:50%; bottom:18px; transform:translateX(-50%);
+    width:200px; height:130px; border-radius:14px;
+    background:linear-gradient(180deg,#27406e,#1a2742); border:1px solid var(--line);
+    box-shadow:var(--shadow);
+  }
+  .folder::before{content:""; position:absolute; top:-16px; left:18px; width:78px; height:20px;
+    border-radius:8px 8px 0 0; background:#27406e; border:1px solid var(--line); border-bottom:none}
+  .folder span{position:absolute; bottom:12px; left:0; right:0; text-align:center; font-size:.85rem; color:var(--mut)}
+  .filefly{
+    position:absolute; width:54px; height:66px; border-radius:9px; background:var(--card);
+    border:1px solid var(--line); box-shadow:0 8px 24px rgba(0,0,0,.4);
+    display:flex; align-items:flex-end; justify-content:center; padding-bottom:7px;
+    font-size:1.5rem; animation:fly 4.4s ease-in-out infinite;
+  }
+  .filefly::before{content:""; position:absolute; top:8px; left:8px; right:18px; height:5px; border-radius:3px; background:var(--line)}
+  .filefly::after{content:""; position:absolute; top:18px; left:8px; right:24px; height:5px; border-radius:3px; background:var(--line)}
+  @keyframes fly{
+    0%{opacity:0; transform:translate(var(--sx),var(--sy)) rotate(var(--r)) scale(1)}
+    14%{opacity:1}
+    70%{opacity:1; transform:translate(0,-150px) rotate(0) scale(.92)}
+    100%{opacity:0; transform:translate(0,-40px) rotate(0) scale(.4)}
+  }
+
+  /* ---------- sections ---------- */
+  section{padding:100px 0; position:relative}
+  .kicker{color:var(--accent); font-weight:700; letter-spacing:.04em; margin-bottom:10px}
+  h2{font-size:clamp(1.9rem,4vw,2.9rem); font-weight:800; max-width:18ch}
+  .sub{font-size:1.15rem; max-width:60ch}
+
+  .reveal{opacity:0; transform:translateY(34px); transition:opacity .8s ease, transform .8s ease}
+  .reveal.in{opacity:1; transform:none}
+  .reveal.d1{transition-delay:.08s}.reveal.d2{transition-delay:.16s}.reveal.d3{transition-delay:.24s}.reveal.d4{transition-delay:.32s}
+
+  /* ---------- interactive demo ---------- */
+  .demo{background:var(--bg2); border:1px solid var(--line); border-radius:var(--radius); padding:28px; box-shadow:var(--shadow)}
+  .demo-head{display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:18px}
+  .demo-cols{display:grid; grid-template-columns:1fr 1fr; gap:22px}
+  @media(max-width:760px){.demo-cols{grid-template-columns:1fr}.hero-grid{grid-template-columns:1fr}.stage{order:-1}}
+  .panel{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; min-height:330px}
+  .panel h4{margin:.2em 0 14px; font-size:.95rem; color:var(--dim); text-transform:uppercase; letter-spacing:.1em}
+  .messy{display:flex; flex-wrap:wrap; gap:10px}
+  .file{
+    --c:var(--accent); display:flex; align-items:center; gap:8px; background:var(--bg2);
+    border:1px solid var(--line); border-left:3px solid var(--c); border-radius:10px;
+    padding:9px 12px; font-size:.9rem; transition:.5s cubic-bezier(.2,.8,.2,1);
+  }
+  .file .ic{font-size:1.1rem}
+  .file.gone{opacity:0; transform:scale(.6) translateY(-12px)}
+  .bins{display:flex; flex-direction:column; gap:10px}
+  .bin{border:1px dashed var(--line); border-radius:11px; padding:10px 12px; transition:.4s}
+  .bin.hot{border-color:var(--accent); background:rgba(91,140,255,.06)}
+  .bin .blab{display:flex; justify-content:space-between; font-size:.82rem; color:var(--dim); margin-bottom:6px; letter-spacing:.04em}
+  .bin .items{display:flex; flex-wrap:wrap; gap:7px; min-height:8px}
+  .chip{font-size:.82rem; background:var(--bg2); border:1px solid var(--line); border-radius:8px; padding:5px 9px;
+    opacity:0; transform:translateY(8px); transition:.5s; display:flex; align-items:center; gap:6px}
+  .chip.show{opacity:1; transform:none}
+  .conf{font-size:.7rem; color:var(--good); border:1px solid rgba(55,214,160,.4); border-radius:6px; padding:1px 5px}
+  .conf.low{color:var(--warn); border-color:rgba(255,180,84,.4)}
+  .review-bin{border-color:rgba(255,180,84,.4); background:rgba(255,180,84,.05)}
+  .review-bin .blab{color:var(--warn)}
+  .narrate{margin-top:16px; font-size:.96rem; color:var(--mut); min-height:48px; border-top:1px solid var(--line); padding-top:14px}
+  .demo-btns{display:flex; gap:10px}
+  .mini{padding:10px 18px; font-size:.92rem}
+
+  /* ---------- pipeline ---------- */
+  .pipe{display:grid; grid-template-columns:repeat(4,1fr); gap:18px; margin-top:30px}
+  @media(max-width:760px){.pipe{grid-template-columns:1fr}}
+  .step{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:24px; position:relative}
+  .step .n{font-size:.8rem; color:var(--dim); letter-spacing:.2em}
+  .step .em{font-size:2.2rem; margin:6px 0 12px}
+  .step h3{font-size:1.18rem}
+  .step p{font-size:.97rem; margin:0}
+
+  /* ---------- cards ---------- */
+  .cards{display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-top:30px}
+  @media(max-width:760px){.cards{grid-template-columns:1fr}}
+  .scard{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:26px}
+  .scard .em{font-size:1.9rem; margin-bottom:10px}
+  .scard h3{font-size:1.15rem}
+  .scard p{font-size:.97rem; margin:0}
+
+  /* ---------- stats ---------- */
+  .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:18px; text-align:center; margin-top:36px}
+  @media(max-width:760px){.stats{grid-template-columns:1fr 1fr}}
+  .stat{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:28px 16px}
+  .stat .num{font-size:2.8rem; font-weight:800; line-height:1}
+  .stat .lab{color:var(--dim); font-size:.92rem; margin-top:8px}
+
+  /* ---------- faq ---------- */
+  .faq{border:1px solid var(--line); border-radius:14px; background:var(--card); margin-bottom:12px; overflow:hidden}
+  .faq summary{cursor:pointer; padding:18px 22px; font-weight:600; list-style:none; display:flex; justify-content:space-between; align-items:center}
+  .faq summary::-webkit-details-marker{display:none}
+  .faq summary::after{content:"+"; color:var(--accent); font-size:1.5rem; transition:.3s}
+  .faq[open] summary::after{transform:rotate(45deg)}
+  .faq p{padding:0 22px 20px; margin:0; font-size:1rem}
+
+  footer{padding:60px 0 80px; border-top:1px solid var(--line); color:var(--dim); text-align:center}
+  .pulse{animation:pulse 2s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+  .scrolldot{position:absolute; bottom:34px; left:50%; transform:translateX(-50%); color:var(--dim); font-size:.85rem; text-align:center}
+</style>
+</head>
+<body>
+<div class="aurora"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
+
+<!-- ===================== HERO ===================== -->
+<header>
+  <div class="wrap hero-grid">
+    <div>
+      <span class="badge">Cortex · your files, finally tidy</span>
+      <h1>The assistant that <span class="grad">sorts your files for you</span> — and never sends them anywhere.</h1>
+      <p class="lede">It looks at what each file actually <em>is</em> — a receipt, a photo of your dog, a work document — and files it where it belongs. All on your own computer.</p>
+      <div class="cta">
+        <a href="#demo" class="btn">See it work →</a>
+        <a href="#how" class="btn ghost">How it works</a>
+      </div>
+    </div>
+    <div class="stage" id="stage" aria-hidden="true">
+      <div class="folder"><span>Organized</span></div>
+    </div>
+  </div>
+  <div class="scrolldot pulse">scroll to explore ↓</div>
+</header>
+
+<!-- ===================== PROBLEM ===================== -->
+<section id="problem">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="kicker">The everyday mess</div>
+      <h2>Your Downloads folder is where files go to disappear.</h2>
+    </div>
+    <p class="sub reveal d1">Screenshots, invoices, tax forms, holiday photos, that PDF you swear you saved — all dumped into one giant pile, sorted by nothing but the date you happened to grab them. Finding anything later means scrolling, squinting at thumbnails, and opening the wrong file three times.</p>
+    <p class="sub reveal d2">You could organize it by hand. But it's tedious, you'd have to keep doing it forever, and halfway through you give up. The usual "smart" cleanup tools fix this by uploading everything you own to a company's servers — trading your mess for your privacy. <strong class="accent">Cortex was built to refuse that trade.</strong></p>
+  </div>
+</section>
+
+<!-- ===================== INTERACTIVE DEMO ===================== -->
+<section id="demo">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="kicker">Try it</div>
+      <h2>Watch it tidy a messy folder.</h2>
+      <p class="sub">This is a simulation of exactly what Cortex does. Press the button and watch each file get understood, sorted, and — when it's not sure — politely set aside for you to decide.</p>
+    </div>
+
+    <div class="demo reveal d1">
+      <div class="demo-head">
+        <strong>📁 A typical messy folder</strong>
+        <div class="demo-btns">
+          <button class="btn mini" id="run">✨ Organize my files</button>
+          <button class="btn ghost mini" id="reset">Reset</button>
+        </div>
+      </div>
+      <div class="demo-cols">
+        <div class="panel">
+          <h4>Before — one big pile</h4>
+          <div class="messy" id="messy"></div>
+        </div>
+        <div class="panel">
+          <h4>After — sorted into the right places</h4>
+          <div class="bins" id="bins"></div>
+        </div>
+      </div>
+      <div class="narrate" id="narrate">Press <strong>“Organize my files”</strong> to begin. Nothing here ever leaves this page — just like the real thing never leaves your computer.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== HOW IT WORKS ===================== -->
+<section id="how">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="kicker">Under the hood, in plain English</div>
+      <h2>Four calm steps, every time.</h2>
+      <p class="sub">There's no magic and no guesswork dressed up as confidence. Cortex moves through the same four stages a careful human assistant would.</p>
+    </div>
+    <div class="pipe">
+      <div class="step reveal d1"><div class="n">STEP 1</div><div class="em">👀</div><h3>It looks</h3><p>Cortex walks through your folder and notes the basics of each file — its name, type, and size — without opening or changing anything. Think of it as taking inventory.</p></div>
+      <div class="step reveal d2"><div class="n">STEP 2</div><div class="em">🧠</div><h3>It understands</h3><p>For documents it reads a little of the text; for pictures it actually looks at the image. Two small AI models — one for words, one for pictures — turn “what's in this file” into a meaning the computer can compare.</p></div>
+      <div class="step reveal d3"><div class="n">STEP 3</div><div class="em">⚖️</div><h3>It decides — carefully</h3><p>It matches each file to the best-fitting category and scores how sure it is. Confident? It's queued to move. Unsure? It's set aside for you. It would rather ask than guess wrong.</p></div>
+      <div class="step reveal d4"><div class="n">STEP 4</div><div class="em">📦</div><h3>It tidies — reversibly</h3><p>It shows you the full plan first. Only when you say go does it move anything — into the trash-safe, fully undoable kind of move. One command puts everything back.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== SAFETY ===================== -->
+<section id="safety">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="kicker">Built so it can't lose your stuff</div>
+      <h2>Cautious by design, not by promise.</h2>
+      <p class="sub">The scariest thing about a tool that moves files is a tool that moves the <em>wrong</em> files. Cortex is engineered so that mistakes are visible, reversible, and rare.</p>
+    </div>
+    <div class="cards">
+      <div class="scard reveal d1"><div class="em">📝</div><h3>Always shows the plan first</h3><p>Before a single file moves, you see a complete preview: this file goes here, that one there. Nothing happens until you approve it. The default is to do nothing.</p></div>
+      <div class="scard reveal d2"><div class="em">↩️</div><h3>Every move is undoable</h3><p>Files aren't deleted or overwritten — they're moved the recoverable way, and every action is written to a log. Changed your mind? One “undo” command rewinds it, and it checks each file is untouched before reversing it.</p></div>
+      <div class="scard reveal d3"><div class="em">🙋</div><h3>“I'm not sure” is a valid answer</h3><p>When Cortex isn't confident, it doesn't guess — it leaves the file exactly where it was and flags it for you. In testing across 75 files, it made <strong class="accent">zero wrong moves</strong>.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== PRIVACY ===================== -->
+<section id="privacy">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="kicker">The whole point</div>
+      <h2>Your files never leave your computer.</h2>
+    </div>
+    <p class="sub reveal d1">Most “AI” tools work by sending your data to a server somewhere. Cortex does the opposite: the AI models live <em>on your machine</em>. Your tax documents, your private photos, your work files — none of them are uploaded, copied to the cloud, or seen by anyone but you. There's no account to make, no internet connection required once it's set up, and nothing tracking what you do.</p>
+    <p class="sub reveal d2">The only time it touches the internet is the very first run, when it downloads the AI models themselves — and even that only happens after you explicitly say yes. After that, you could unplug your network entirely and it would work exactly the same.</p>
+  </div>
+</section>
+
+<!-- ===================== STATS ===================== -->
+<section id="proof">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="kicker">Tested honestly</div>
+      <h2>The numbers, no spin.</h2>
+      <p class="sub">Measured on 75 real public files — source code, books, photographs, screenshots, invoices, scanned PDFs — using the actual AI models, not a demo.</p>
+    </div>
+    <div class="stats">
+      <div class="stat reveal d1"><div class="num" data-to="98">0</div><div class="lab">% of files sorted correctly</div></div>
+      <div class="stat reveal d2"><div class="num" data-to="100">0</div><div class="lab">% precision on moves it made</div></div>
+      <div class="stat reveal d3"><div class="num" data-to="0">0</div><div class="lab">files moved to the wrong place</div></div>
+      <div class="stat reveal d4"><div class="num" data-to="0">0</div><div class="lab">files ever sent to the cloud</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FAQ ===================== -->
+<section id="faq">
+  <div class="wrap">
+    <div class="reveal"><div class="kicker">Good questions</div><h2>Things people ask.</h2></div>
+    <div class="reveal d1">
+      <details class="faq"><summary>Will it mess up my files?</summary><p>It's built specifically to avoid that. It shows you exactly what it plans to do before doing anything, only moves files in a recoverable way, keeps a log of every action, and can undo everything with one command. When it isn't confident about a file, it leaves it untouched rather than risk a wrong move.</p></details>
+      <details class="faq"><summary>Do I need to be technical to use it?</summary><p>Right now it runs as a command you type, so a little comfort with a terminal helps — it's currently best for tech-comfortable users. The thinking and the safety, though, are designed for everyone: plain previews, plain categories, and an easy undo.</p></details>
+      <details class="faq"><summary>Is it really private? How do I know?</summary><p>The entire project is open — anyone can read exactly what it does. It makes no internet connections during normal use, has no accounts or tracking, and the AI runs on your own machine. The one exception is a one-time model download on first setup, which only happens with your explicit permission.</p></details>
+      <details class="faq"><summary>What kinds of files can it sort?</summary><p>Documents and text (including the text inside PDFs, even scanned ones), source code, and photos and images — invoices, receipts, screenshots, personal photos, books, and more. You can edit the list of categories to match how you think about your own files.</p></details>
+      <details class="faq"><summary>What does it cost?</summary><p>It's free and open-source under the MIT license. The AI models it uses are also free and open. There's no subscription and nothing to buy.</p></details>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p style="color:var(--mut)">Cortex — a privacy-first, on-device AI file organizer.</p>
+    <p style="font-size:.9rem">Runs locally on macOS &amp; Linux · Open-source (MIT) · No cloud, no tracking</p>
+  </div>
+</footer>
+
+<script>
+/* ---------- scroll reveals ---------- */
+const io = new IntersectionObserver((es)=>{
+  es.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); }});
+},{threshold:.16});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+/* ---------- hero flying files ---------- */
+(function(){
+  const stage=document.getElementById('stage');
+  const emojis=['📄','🖼️','🧾','💻','📸','📚','🎵','📦'];
+  const positions=[[-260,40,-18],[-160,120,10],[-60,30,-8],[60,110,12],[160,40,-14],[260,120,8],[-210,150,6],[210,150,-10]];
+  emojis.forEach((em,i)=>{
+    const f=document.createElement('div');
+    f.className='filefly'; f.textContent=em;
+    const [sx,sy,r]=positions[i];
+    f.style.left='50%'; f.style.top='50%';
+    f.style.setProperty('--sx',sx+'px'); f.style.setProperty('--sy',sy+'px'); f.style.setProperty('--r',r+'deg');
+    f.style.animationDelay=(i*0.55)+'s';
+    stage.appendChild(f);
+  });
+})();
+
+/* ---------- count-up stats ---------- */
+const seen=new Set();
+const statIO=new IntersectionObserver((es)=>{
+  es.forEach(e=>{
+    if(e.isIntersecting && !seen.has(e.target)){
+      seen.add(e.target);
+      const to=+e.target.dataset.to; let cur=0; const step=Math.max(1,Math.ceil(to/40));
+      const tick=()=>{ cur=Math.min(to,cur+step); e.target.textContent=cur; if(cur<to) requestAnimationFrame(tick); };
+      tick();
+    }
+  });
+},{threshold:.6});
+document.querySelectorAll('.num').forEach(n=>statIO.observe(n));
+
+/* ---------- interactive organize demo ---------- */
+const FILES=[
+  {n:'IMG_4821.jpg',  ic:'🖼️', cat:'Photos',     conf:.91, c:'#37d6a0'},
+  {n:'invoice_q3.pdf',ic:'🧾', cat:'Documents',  conf:.95, c:'#5b8cff'},
+  {n:'app.py',        ic:'💻', cat:'Code',       conf:.96, c:'#8a6bff'},
+  {n:'Screenshot.png',ic:'📸', cat:'Screenshots',conf:.88, c:'#5b8cff'},
+  {n:'pride.txt',     ic:'📚', cat:'Documents',  conf:.84, c:'#5b8cff'},
+  {n:'backup.zip',    ic:'📦', cat:'Archives',   conf:.95, c:'#37d6a0'},
+  {n:'beach.jpg',     ic:'🏖️', cat:'Photos',     conf:.86, c:'#37d6a0'},
+  {n:'unknown_blob',  ic:'❓', cat:'__review',   conf:.22, c:'#ffb454'},
+];
+const CATS=['Documents','Photos','Code','Screenshots','Archives'];
+const messy=document.getElementById('messy');
+const bins=document.getElementById('bins');
+const narrate=document.getElementById('narrate');
+const runBtn=document.getElementById('run');
+const resetBtn=document.getElementById('reset');
+let running=false;
+
+function build(){
+  messy.innerHTML=''; bins.innerHTML='';
+  FILES.forEach((f,i)=>{
+    const el=document.createElement('div'); el.className='file'; el.style.setProperty('--c',f.c);
+    el.innerHTML=`<span class="ic">${f.ic}</span> ${f.n}`; el.id='f'+i; messy.appendChild(el);
+  });
+  CATS.forEach(c=>{
+    const b=document.createElement('div'); b.className='bin'; b.dataset.cat=c;
+    b.innerHTML=`<div class="blab"><span>📁 ${c}</span><span class="cnt">0</span></div><div class="items"></div>`;
+    bins.appendChild(b);
+  });
+  const rb=document.createElement('div'); rb.className='bin review-bin'; rb.dataset.cat='__review';
+  rb.innerHTML=`<div class="blab"><span>🙋 Needs your review</span><span class="cnt">0</span></div><div class="items"></div>`;
+  bins.appendChild(rb);
+}
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+
+async function run(){
+  if(running) return; running=true; runBtn.disabled=true; runBtn.style.opacity=.5;
+  for(let i=0;i<FILES.length;i++){
+    const f=FILES[i]; const src=document.getElementById('f'+i);
+    const review=f.cat==='__review';
+    narrate.innerHTML = review
+      ? `Looking at <strong>${f.n}</strong>… I can't tell what this is. <span style="color:var(--warn)">I'll leave it for you to decide</span> rather than guess.`
+      : `Looking at <strong>${f.n}</strong>… this reads like <strong>${f.cat}</strong>. I'm ${Math.round(f.conf*100)}% sure — moving it.`;
+    const bin=bins.querySelector(`.bin[data-cat="${f.cat}"]`);
+    bin.classList.add('hot');
+    await wait(620);
+    src.classList.add('gone');
+    const chip=document.createElement('div'); chip.className='chip';
+    chip.innerHTML=`<span>${f.ic}</span>${f.n} <span class="conf ${review?'low':''}">${Math.round(f.conf*100)}%</span>`;
+    bin.querySelector('.items').appendChild(chip);
+    const cnt=bin.querySelector('.cnt'); cnt.textContent=+cnt.textContent+1;
+    requestAnimationFrame(()=>chip.classList.add('show'));
+    await wait(180); bin.classList.remove('hot');
+  }
+  narrate.innerHTML=`✅ Done. <strong>7 files sorted</strong> into the right places, <strong style="color:var(--warn)">1 set aside</strong> for you. In the real app every one of these moves is previewed first and can be undone instantly — nothing was sent anywhere.`;
+  running=false; runBtn.disabled=false; runBtn.style.opacity=1;
+}
+runBtn.addEventListener('click',run);
+resetBtn.addEventListener('click',()=>{ if(running) return; build(); narrate.innerHTML='Folder reset. Press <strong>“Organize my files”</strong> to run it again.'; });
+build();
+</script>
+</body>
+</html>
