@@ -308,7 +308,7 @@ The evaluation also **surfaced and fixed two real defects** (commit `e44b774`):
 ### Known limitations
 
 1. Calibration thresholds were tuned on a small sample set — treat recall as indicative, not guaranteed. Precision (not moving things wrongly) is the design priority and held at 100% in both evaluations (14-file and 61-file).
-2. Image classification across 13 categories is conservative: real-photo categories often land in `needs_review`. That is the intended failure mode, but it means more manual review for photo-heavy folders.
+2. Image classification across 13 categories is conservative: lower-confidence photos land in `needs_review` rather than being guessed. The CLIP confidence threshold was tuned on a 29-photo labeled set (pets / landmarks / screenshots) to recall ~52% of photos at 100% precision (zero wrong auto-moves); the rest are held for review. This is the intended safety-over-recall tradeoff, but it still means manual review for a meaningful share of photo-heavy folders.
 3. The watcher polls (1 s default) rather than using native FSEvents/inotify, and no daemon currently consumes its event queue — incremental re-classification is manual (`classify --cache`).
 4. PDFs are classified by their pymupdf-extracted text layer; scanned PDFs without a text layer are held for review (OCR is not implemented).
 5. Preference learning is a linear, clamped bias — deliberately simple; embedding-space adaptation is future work.

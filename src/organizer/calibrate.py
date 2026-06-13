@@ -37,12 +37,16 @@ DEFAULT_TEMPERATURE: dict[EmbeddingSpace, float] = {
 }
 
 # Per-space auto-move gate. Below this calibrated confidence -> needs_review.
-# Conservative by design (safety > recall, §7): on the 13-cat eval this gave
-# bge 5 correct / 0 wrong / 0 review and clip 2 correct / 0 wrong / 6 review —
-# zero confidently-wrong auto-moves in both spaces.
+# Conservative by design (safety > recall, §7).
+#
+# CLIP threshold tuned on a 29-photo labeled Wikimedia set (pets / landmarks /
+# screenshots) scored against all 13 categories: lowering it from 0.60 to 0.40
+# raised photo recall 0.31 -> 0.52 while holding precision at 1.00 (zero wrong
+# auto-moves). 0.30 reaches 0.69 recall but 0.40 keeps a margin against the
+# small-sample fit. bge threshold unchanged (text recall was already strong).
 DEFAULT_MIN_CONFIDENCE: dict[EmbeddingSpace, float] = {
     EmbeddingSpace.BGE: 0.40,
-    EmbeddingSpace.CLIP: 0.60,
+    EmbeddingSpace.CLIP: 0.40,
 }
 
 
