@@ -137,6 +137,25 @@ def tier_of(extension: str, mime: str, size: int) -> Tier:
     return Tier.REVIEW
 
 
+# Markers that identify a directory as a self-contained project/checkout which
+# must NOT be reorganized from the inside (safety guard, see scan()).
+_PROJECT_MARKERS: frozenset[str] = frozenset({
+    ".git", ".hg", ".svn",            # version control
+    "pyproject.toml", "setup.py",     # python project
+    "package.json", "Cargo.toml",     # node / rust
+    "go.mod", "pom.xml", "build.gradle",  # go / java
+})
+
+
+def _is_project_root(dirpath: str) -> bool:
+    """True if *dirpath* contains a marker identifying it as a project/repo."""
+    try:
+        entries = set(os.listdir(dirpath))
+    except OSError:
+        return False
+    return bool(entries & _PROJECT_MARKERS)
+
+
 # ---------------------------------------------------------------------------
 # Public API — Scanner (ARCHITECTURE-EXTENSION.md §2, "Scanner" row)
 # ---------------------------------------------------------------------------
@@ -168,6 +187,16 @@ def scan(root: pathlib.Path) -> Iterator[FileRecord]:
 
     # os.walk with topdown=True lets us prune excluded dirs in-place.
     for dirpath, dirnames, filenames in os.walk(root, topdown=True):
+        # SAFETY GUARD: never rip files out of a project/repo. A directory
+        # that is the root of a version-control checkout or a packaged project
+        # is treated as an atomic unit — we do not descend into it. This stops
+        # the footgun where organizing a parent folder (e.g. ~/Desktop) scatters
+        # a repo's source files into category folders. The repo's own root is
+        # still scanned at the top level only if `root` IS that repo.
+        if pathlib.Path(dirpath) != root and _is_project_root(dirpath):
+            dirnames[:] = []  # do not recurse into this project
+            continue
+
         # Prune excluded and dot-dirs to avoid descending into them.
         # Mutating `dirnames` in-place prevents os.walk from recursing.
         dirnames[:] = [

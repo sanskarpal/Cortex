@@ -201,6 +201,35 @@ class TestSafe6Exclusions:
         assert "some_lib.js" not in names
         assert "app.py" in names
 
+    def test_project_repos_not_descended(self, tmp_path):
+        """SAFETY: a git repo / packaged project under the scan root is treated
+        as atomic — its internal files are never organized out of it."""
+        # loose file at the top level -> should be scanned
+        (tmp_path / "loose.txt").write_text("hi", encoding="utf-8")
+        # a git repo with source inside -> must be skipped wholesale
+        repo = tmp_path / "myrepo"
+        (repo / "src").mkdir(parents=True)
+        (repo / ".git").write_text("", encoding="utf-8")  # marker
+        (repo / "src" / "code.py").write_text("x=1", encoding="utf-8")
+        # a python project (pyproject.toml marker)
+        proj = tmp_path / "pyproj"
+        proj.mkdir()
+        (proj / "pyproject.toml").write_text("[project]", encoding="utf-8")
+        (proj / "module.py").write_text("y=2", encoding="utf-8")
+
+        names = {r.path.name for r in scan(tmp_path)}
+        assert "loose.txt" in names
+        assert "code.py" not in names      # inside a git repo
+        assert "module.py" not in names    # inside a packaged project
+
+    def test_scanning_the_repo_itself_still_works(self, tmp_path):
+        """If the scan root *is* the project, its top-level files are still
+        scanned (the guard only blocks descending into nested projects)."""
+        (tmp_path / "pyproject.toml").write_text("[project]", encoding="utf-8")
+        (tmp_path / "readme.txt").write_text("hi", encoding="utf-8")
+        names = {r.path.name for r in scan(tmp_path)}
+        assert "readme.txt" in names
+
 
 # ---------------------------------------------------------------------------
 # M1 Done-Criterion 7 / TC-SAFE-1 — Read-only: zero filesystem mutation

@@ -213,6 +213,27 @@ def cmd_apply(args) -> int:
     embedder = _build_embedder(args.real, args.consent)
     cfg, taxonomy = _load_taxonomy(_resolve_config(args.config), embedder)
     plan = _plan_from_scan(args, embedder, taxonomy, RuleEngine(cfg.categories))
+
+    # Confirmation gate (§7.1): apply mutates the filesystem, so unless the
+    # user passed --yes, show the scope and require an explicit y/N. Protects
+    # against accidentally organizing a huge or wrong directory.
+    n = len(plan.moves)
+    if n == 0:
+        print("nothing to move (all files held for review or no matches).")
+        return 0
+    if not args.yes:
+        dirs = sorted({str(Path(op.dst).parent) for op in plan.moves})
+        print(f"About to move {n} file(s) from {args.directory} into {args.dest}/")
+        print(f"  across {len(dirs)} category folder(s), mode = {args.mode}.")
+        print("  (preview the exact plan with `organizer preview`; this is reversible with `organizer undo`)")
+        try:
+            ans = input("Proceed? [y/N] ").strip().lower()
+        except EOFError:
+            ans = ""
+        if ans not in ("y", "yes"):
+            print("aborted — nothing moved.")
+            return 0
+
     for op in plan.moves:  # explicit user invocation == approval (§7.1)
         op.approved = True
     log_path = Path(args.log)
@@ -299,7 +320,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("scan"); sp.add_argument("directory"); sp.add_argument("--db", default=DEFAULT_DB); sp.set_defaults(func=cmd_scan)
     sp = sub.add_parser("classify"); add_common(sp); sp.add_argument("--cache", action="store_true", help="skip cached files (§6)"); sp.set_defaults(func=cmd_classify)
     sp = sub.add_parser("preview"); add_common(sp); sp.add_argument("--dest", default="organized"); sp.set_defaults(func=cmd_preview)
-    sp = sub.add_parser("apply"); add_common(sp); sp.add_argument("--dest", default="organized"); sp.add_argument("--log", default=DEFAULT_LOG); sp.add_argument("--mode", default="trash", choices=[m.value for m in MoveMode]); sp.set_defaults(func=cmd_apply)
+    sp = sub.add_parser("apply"); add_common(sp); sp.add_argument("--dest", default="organized"); sp.add_argument("--log", default=DEFAULT_LOG); sp.add_argument("--mode", default="trash", choices=[m.value for m in MoveMode]); sp.add_argument("--yes", "-y", action="store_true", help="skip the confirmation prompt"); sp.set_defaults(func=cmd_apply)
     sp = sub.add_parser("undo"); sp.add_argument("--log", default=DEFAULT_LOG); sp.add_argument("-n", type=int, default=1); sp.set_defaults(func=cmd_undo)
     sp = sub.add_parser("review"); sp.add_argument("file"); sp.add_argument("label"); add_common(sp, need_dir=False); sp.add_argument("--dest", default="organized"); sp.add_argument("--log", default=DEFAULT_LOG); sp.add_argument("--mode", default="trash", choices=[m.value for m in MoveMode]); sp.set_defaults(func=cmd_review)
     sp = sub.add_parser("tui"); sp.add_argument("--db", default=DEFAULT_DB); sp.add_argument("--log", default=DEFAULT_LOG); sp.add_argument("--prefs", default=DEFAULT_PREFS); sp.set_defaults(func=cmd_tui)
